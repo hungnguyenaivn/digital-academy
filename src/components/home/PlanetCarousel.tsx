@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import type { Course } from "@/data/courses";
 import { CourseRibbon } from "./CourseRibbon";
+import { RivePlanet } from "./RivePlanet";
 
 const TRANSITION_MS = 400;
 const SWIPE_THRESHOLD_PX = 40;
@@ -133,6 +134,7 @@ export function PlanetCarousel({ courses }: { courses: Course[] }) {
         const offset = circularOffset(index, position, n);
         const slot = orbitSlot(offset);
         const visible = Math.abs(offset) < 2;
+        const isCenter = Math.abs(offset) < 0.001;
         const isSide = Math.abs(Math.abs(offset) - 1) < 0.001;
         return (
           <div
@@ -147,12 +149,22 @@ export function PlanetCarousel({ courses }: { courses: Course[] }) {
             }}
             onClick={isSide ? () => go(Math.sign(offset)) : undefined}
           >
-            <img
-              src={course.planetImage}
-              alt={index === activeIndex ? course.name : ""}
-              draggable={false}
-              className="pointer-events-none absolute inset-0 size-full object-contain"
-            />
+            {course.planetRive ? (
+              <RivePlanet
+                config={course.planetRive}
+                image={course.planetImage}
+                alt={index === activeIndex ? course.name : ""}
+                interactive={isCenter || isSide}
+                playing={visible}
+              />
+            ) : (
+              <img
+                src={course.planetImage}
+                alt={index === activeIndex ? course.name : ""}
+                draggable={false}
+                className="pointer-events-none absolute inset-0 size-full object-contain"
+              />
+            )}
           </div>
         );
       })}
