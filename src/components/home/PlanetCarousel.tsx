@@ -30,13 +30,24 @@ const DRAG_PX_PER_SLOT = (SIDE.dxLeft + SIDE.dxRight) / 2;
 const DRAG_START_PX = 6;
 // Thả tay khi đã kéo/vuốt ≥ 10% khoảng cách (~40px) thì sang hành tinh kế tiếp, chưa tới thì trở về.
 const COMMIT_FRACTION = 0.1;
-// Trackpad 2 ngón vuốt ngang: số px cuộn ứng với 1 hành tinh. Mỗi cử chỉ đi tối đa 1 hành tinh (quán tính trackpad
-// có thể kéo dài cả giây); cử chỉ kết thúc khi không còn sự kiện wheel trong WHEEL_IDLE_MS.
+// Trackpad 2 ngón vuốt ngang: hành tinh bám theo ngón tay (300px cuộn = 1 hành tinh). Vuốt được WHEEL_COMMIT_FRACTION
+// là chuyển hẳn sang hành tinh kế tiếp ngay, không chờ hết quán tính (có thể kéo dài cả giây); phần còn lại của cú vuốt
+// bị bỏ qua. Cử chỉ kết thúc khi không còn sự kiện wheel trong WHEEL_IDLE_MS.
 const WHEEL_PX_PER_SLOT = 300;
-const WHEEL_IDLE_MS = 150;
+const WHEEL_COMMIT_FRACTION = 0.35;
+const WHEEL_IDLE_MS = 120;
 const WHEEL_LINE_PX = 16;
+// Sau khi đã chuyển, lực vuốt (|deltaX|) giảm xuống dưới 30% đỉnh rồi tăng gấp 3 trở lại = người dùng vuốt tiếp lần nữa.
+const WHEEL_REARM_DECAY = 0.3;
+const WHEEL_REARM_RISE = 3;
+const WHEEL_REARM_MIN_PX = 4;
+// Hằng số thời gian (ms) làm mượt vị trí khi bám theo trackpad — lọc các bước nhảy không đều giữa các sự kiện wheel.
+const FOLLOW_TAU_MS = 45;
 
 const easeOutCubic = (t: number) => 1 - (1 - t) ** 3;
+// Mốc thời gian của requestAnimationFrame là lúc bắt đầu khung hình — có thể sớm hơn performance.now() trong
+// handler đã kích hoạt hoạt ảnh. Bắt đầu tính giờ từ khung hình đầu tiên (coi như đã qua 1 khung) để không bị âm.
+const FRAME_MS = 1000 / 60;
 
 /** Hình học của một hành tinh ở độ lệch `offset` (0 = giữa, ±1 = hai bên, ±2 = ngoài khung, mờ hẳn). */
 function orbitSlot(offset: number) {
@@ -57,7 +68,6 @@ function circularOffset(index: number, position: number, n: number) {
 }
 
 const mod = (value: number, n: number) => ((value % n) + n) % n;
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 function prefersReducedMotion() {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -73,6 +83,8 @@ export function PlanetCarousel({ courses }: { courses: Course[] }) {
   const targetRef = useRef(0);
   const positionRef = useRef(0);
   const frameRef = useRef<number | null>(null);
+  // Đích mà vị trí đang đuổi theo (khi bám theo trackpad); null khi không bám.
+  const followGoalRef = useRef<number | null>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const dragRef = useRef<{
     pointerId: number;
@@ -91,6 +103,7 @@ export function PlanetCarousel({ courses }: { courses: Course[] }) {
   const stopAnimation = useCallback(() => {
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     frameRef.current = null;
+    followGoalRef.current = null;
   }, []);
 
   /** Đặt vị trí ngay lập tức (khi đang kéo / vuốt). */
@@ -101,6 +114,42 @@ export function PlanetCarousel({ courses }: { courses: Course[] }) {
       setPosition(next);
     },
     [stopAnimation],
+  );
+
+  /** Cho vị trí đuổi theo `goal` mỗi khung hình (giảm dần theo hàm mũ) thay vì nhảy theo từng sự kiện. */
+  const followTo = useCallback(
+    (goal: number) => {
+      if (followGoalRef.current !== null) {
+        followGoalRef.current = goal;
+        return;
+      }
+      if (prefersReducedMotion()) {
+        moveTo(goal);
+        return;
+      }
+      stopAnimation();
+      followGoalRef.current = goal;
+      let last: number | null = null;
+      const tick = (now: number) => {
+        const current = followGoalRef.current;
+        if (current === null) return;
+        const elapsed = last === null ? FRAME_MS : Math.max(0, now - last);
+        const alpha = 1 - Math.exp(-elapsed / FOLLOW_TAU_MS);
+        last = now;
+        const from = positionRef.current;
+        const next = Math.abs(current - from) < 0.001 ? current : from + (current - from) * alpha;
+        positionRef.current = next;
+        setPosition(next);
+        if (next === current) {
+          frameRef.current = null;
+          followGoalRef.current = null;
+        } else {
+          frameRef.current = requestAnimationFrame(tick);
+        }
+      };
+      frameRef.current = requestAnimationFrame(tick);
+    },
+    [stopAnimation, moveTo],
   );
 
   /** Chọn khóa `to` và trượt từ vị trí hiện tại về đó theo quỹ đạo. */
@@ -115,8 +164,9 @@ export function PlanetCarousel({ courses }: { courses: Course[] }) {
         moveTo(to);
         return;
       }
-      const start = performance.now();
+      let start: number | null = null;
       const tick = (now: number) => {
+        start ??= now - FRAME_MS;
         const t = Math.min(1, (now - start) / TRANSITION_MS);
         const next = from + (to - from) * easeOutCubic(t);
         positionRef.current = next;
@@ -164,24 +214,66 @@ export function PlanetCarousel({ courses }: { courses: Course[] }) {
   useEffect(() => {
     const section = sectionRef.current;
     if (!section) return;
-    let gesture: { startPosition: number; startTarget: number; delta: number } | null = null;
+    type WheelGesture = {
+      startPosition: number;
+      startTarget: number;
+      delta: number;
+      /** Đã chuyển sang hành tinh kế tiếp; phần còn lại của cú vuốt chỉ dùng để nhận ra cú vuốt mới. */
+      committed: boolean;
+      peak: number;
+      low: number;
+    };
+    let gesture: WheelGesture | null = null;
     let idleTimer: number | undefined;
 
     const onWheel = (event: WheelEvent) => {
       if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
       event.preventDefault();
       if (dragRef.current?.moved) return;
-      gesture ??= { startPosition: positionRef.current, startTarget: targetRef.current, delta: 0 };
-      gesture.delta += event.deltaMode === WheelEvent.DOM_DELTA_LINE ? event.deltaX * WHEEL_LINE_PX : event.deltaX;
-      const next = gesture.startPosition + gesture.delta / WHEEL_PX_PER_SLOT;
-      moveTo(clamp(next, gesture.startTarget - 1, gesture.startTarget + 1));
+      const dx = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? event.deltaX * WHEEL_LINE_PX : event.deltaX;
+      const strength = Math.abs(dx);
 
       window.clearTimeout(idleTimer);
       idleTimer = window.setTimeout(() => {
         const finished = gesture;
         gesture = null;
-        if (finished) release(finished.startTarget);
+        if (finished && !finished.committed) release(finished.startTarget);
       }, WHEEL_IDLE_MS);
+
+      if (gesture?.committed) {
+        if (strength >= gesture.peak) {
+          gesture.peak = strength;
+          gesture.low = strength;
+        } else {
+          gesture.low = Math.min(gesture.low, strength);
+        }
+        const rearmed =
+          gesture.low < gesture.peak * WHEEL_REARM_DECAY &&
+          strength >= gesture.low * WHEEL_REARM_RISE &&
+          strength >= WHEEL_REARM_MIN_PX;
+        if (!rearmed) return;
+        gesture = null;
+      }
+
+      gesture ??= {
+        startPosition: positionRef.current,
+        startTarget: targetRef.current,
+        delta: 0,
+        committed: false,
+        peak: 0,
+        low: 0,
+      };
+      gesture.delta += dx;
+      const next = gesture.startPosition + gesture.delta / WHEEL_PX_PER_SLOT;
+      const moved = next - gesture.startTarget;
+      if (Math.abs(moved) >= WHEEL_COMMIT_FRACTION) {
+        gesture.committed = true;
+        gesture.peak = strength;
+        gesture.low = strength;
+        settle(gesture.startTarget + Math.sign(moved));
+      } else {
+        followTo(next);
+      }
     };
 
     section.addEventListener("wheel", onWheel, { passive: false });
@@ -189,7 +281,7 @@ export function PlanetCarousel({ courses }: { courses: Course[] }) {
       section.removeEventListener("wheel", onWheel);
       window.clearTimeout(idleTimer);
     };
-  }, [moveTo, release]);
+  }, [followTo, settle, release]);
 
   const onPointerDown = (event: PointerEvent<HTMLElement>) => {
     suppressClickRef.current = false;
