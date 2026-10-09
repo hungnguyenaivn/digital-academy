@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import type { Course } from "@/data/courses";
+import { AnimatedPlanetImage } from "./AnimatedPlanetImage";
 import { CourseRibbon } from "./CourseRibbon";
 import { RivePlanet } from "./RivePlanet";
 
@@ -158,11 +159,12 @@ export function PlanetCarousel({ courses }: { courses: Course[] }) {
                 playing={visible}
               />
             ) : (
-              <img
-                src={course.planetImage}
+              <AnimatedPlanetImage
+                image={course.planetImage}
                 alt={index === activeIndex ? course.name : ""}
-                draggable={false}
-                className="pointer-events-none absolute inset-0 size-full object-contain"
+                interactive={isCenter || isSide}
+                playing={visible}
+                phase={index * 0.7}
               />
             )}
           </div>

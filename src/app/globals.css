@@ -14,6 +14,18 @@
       filter: blur(0);
     }
   }
+
+  /* Hành tinh chưa có file Rive: lơ lửng nhẹ, cùng chu kỳ ~4,2s với hoạt ảnh "idle" trong file Rive. */
+  --animate-planet-float: planet-float 4.2s ease-in-out infinite;
+  @keyframes planet-float {
+    0%,
+    100% {
+      transform: translateY(0) rotate(0deg);
+    }
+    50% {
+      transform: translateY(-8px) rotate(1.5deg);
+    }
+  }
 }
 
 body {
