@@ -4,10 +4,10 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent } from "rea
 import type { Course } from "@/data/courses";
 import { AnimatedPlanetImage } from "./AnimatedPlanetImage";
 import { CourseRibbon } from "./CourseRibbon";
+import { STAGE_WIDTH } from "./DesignStage";
 import { RivePlanet } from "./RivePlanet";
 
 const TRANSITION_MS = 400;
-const SWIPE_THRESHOLD_PX = 40;
 
 // Vùng carousel bắt đầu ở y = 132 của khung 1440×900 (frame "Vùng chọn môn — quỹ đạo").
 const AREA_TOP = 132;
@@ -23,6 +23,18 @@ const PHI = 0.42;
 const RX_LEFT = SIDE.dxLeft / Math.sin(PHI);
 const RX_RIGHT = SIDE.dxRight / Math.sin(PHI);
 const RY = (SIDE.y - CENTER.y) / (1 - Math.cos(PHI));
+
+// Kéo chuột / vuốt cảm ứng: hành tinh bám theo tay, kéo 1 khoảng bằng từ tâm ra hành tinh bên cạnh = 1 hành tinh.
+const DRAG_PX_PER_SLOT = (SIDE.dxLeft + SIDE.dxRight) / 2;
+// Dịch chưa quá ngưỡng này (px trên khung 1440×900) thì vẫn là click, chưa phải kéo.
+const DRAG_START_PX = 6;
+// Thả tay khi đã kéo/vuốt ≥ 10% khoảng cách (~40px) thì sang hành tinh kế tiếp, chưa tới thì trở về.
+const COMMIT_FRACTION = 0.1;
+// Trackpad 2 ngón vuốt ngang: số px cuộn ứng với 1 hành tinh. Mỗi cử chỉ đi tối đa 1 hành tinh (quán tính trackpad
+// có thể kéo dài cả giây); cử chỉ kết thúc khi không còn sự kiện wheel trong WHEEL_IDLE_MS.
+const WHEEL_PX_PER_SLOT = 300;
+const WHEEL_IDLE_MS = 150;
+const WHEEL_LINE_PX = 16;
 
 const easeOutCubic = (t: number) => 1 - (1 - t) ** 3;
 
@@ -45,6 +57,7 @@ function circularOffset(index: number, position: number, n: number) {
 }
 
 const mod = (value: number, n: number) => ((value % n) + n) % n;
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 function prefersReducedMotion() {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -53,42 +66,82 @@ function prefersReducedMotion() {
 export function PlanetCarousel({ courses }: { courses: Course[] }) {
   const n = courses.length;
   // `target` là chỉ số không quấn vòng (…, -1, 0, 1, …) để hoạt ảnh luôn đi đúng chiều khi quay vòng ở 2 đầu.
+  // `position` là vị trí đang hiển thị: số lẻ khi đang trượt hoặc đang kéo.
   const [target, setTarget] = useState(0);
   const [position, setPosition] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const targetRef = useRef(0);
   const positionRef = useRef(0);
   const frameRef = useRef<number | null>(null);
-  const swipeStartX = useRef<number | null>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startPosition: number;
+    startTarget: number;
+    /** Tỉ lệ px màn hình / px khung 1440×900 (khung được scale theo viewport). */
+    scale: number;
+    moved: boolean;
+  } | null>(null);
+  const suppressClickRef = useRef(false);
 
   const activeIndex = mod(target, n);
   const activeCourse = courses[activeIndex];
 
-  useEffect(() => {
-    const from = positionRef.current;
-    if (from === target) return;
+  const stopAnimation = useCallback(() => {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    frameRef.current = null;
+  }, []);
 
-    if (prefersReducedMotion()) {
-      positionRef.current = target;
-      frameRef.current = requestAnimationFrame(() => setPosition(target));
-      return () => {
-        if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
-      };
-    }
-
-    const start = performance.now();
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / TRANSITION_MS);
-      const next = from + (target - from) * easeOutCubic(t);
+  /** Đặt vị trí ngay lập tức (khi đang kéo / vuốt). */
+  const moveTo = useCallback(
+    (next: number) => {
+      stopAnimation();
       positionRef.current = next;
       setPosition(next);
-      if (t < 1) frameRef.current = requestAnimationFrame(tick);
-    };
-    frameRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
-    };
-  }, [target]);
+    },
+    [stopAnimation],
+  );
 
-  const go = useCallback((step: number) => setTarget((t) => t + step), []);
+  /** Chọn khóa `to` và trượt từ vị trí hiện tại về đó theo quỹ đạo. */
+  const settle = useCallback(
+    (to: number) => {
+      stopAnimation();
+      targetRef.current = to;
+      setTarget(to);
+      const from = positionRef.current;
+      if (from === to) return;
+      if (prefersReducedMotion()) {
+        moveTo(to);
+        return;
+      }
+      const start = performance.now();
+      const tick = (now: number) => {
+        const t = Math.min(1, (now - start) / TRANSITION_MS);
+        const next = from + (to - from) * easeOutCubic(t);
+        positionRef.current = next;
+        setPosition(next);
+        frameRef.current = t < 1 ? requestAnimationFrame(tick) : null;
+      };
+      frameRef.current = requestAnimationFrame(tick);
+    },
+    [stopAnimation, moveTo],
+  );
+
+  /** Kết thúc kéo / vuốt bắt đầu từ khóa `from`: dừng ở hành tinh gần nhất, quá ngưỡng thì ít nhất sang hành tinh kế. */
+  const release = useCallback(
+    (from: number) => {
+      const moved = positionRef.current - from;
+      let steps = Math.round(moved);
+      if (steps === 0 && Math.abs(moved) >= COMMIT_FRACTION) steps = Math.sign(moved);
+      settle(from + steps);
+    },
+    [settle],
+  );
+
+  const go = useCallback((step: number) => settle(targetRef.current + step), [settle]);
+
+  useEffect(() => stopAnimation, [stopAnimation]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -107,26 +160,92 @@ export function PlanetCarousel({ courses }: { courses: Course[] }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [go]);
 
-  const onPointerDown = (event: PointerEvent) => {
-    if (event.pointerType === "touch") swipeStartX.current = event.clientX;
+  // Trackpad 2 ngón vuốt ngang. Gắn listener thủ công vì cần passive: false để chặn cử chỉ Back/Forward của trình duyệt.
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
+    let gesture: { startPosition: number; startTarget: number; delta: number } | null = null;
+    let idleTimer: number | undefined;
+
+    const onWheel = (event: WheelEvent) => {
+      if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+      event.preventDefault();
+      if (dragRef.current?.moved) return;
+      gesture ??= { startPosition: positionRef.current, startTarget: targetRef.current, delta: 0 };
+      gesture.delta += event.deltaMode === WheelEvent.DOM_DELTA_LINE ? event.deltaX * WHEEL_LINE_PX : event.deltaX;
+      const next = gesture.startPosition + gesture.delta / WHEEL_PX_PER_SLOT;
+      moveTo(clamp(next, gesture.startTarget - 1, gesture.startTarget + 1));
+
+      window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(() => {
+        const finished = gesture;
+        gesture = null;
+        if (finished) release(finished.startTarget);
+      }, WHEEL_IDLE_MS);
+    };
+
+    section.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      section.removeEventListener("wheel", onWheel);
+      window.clearTimeout(idleTimer);
+    };
+  }, [moveTo, release]);
+
+  const onPointerDown = (event: PointerEvent<HTMLElement>) => {
+    suppressClickRef.current = false;
+    if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
+    if ((event.target as HTMLElement).closest("button")) return;
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startPosition: positionRef.current,
+      startTarget: targetRef.current,
+      scale: event.currentTarget.getBoundingClientRect().width / STAGE_WIDTH,
+      moved: false,
+    };
   };
-  const onPointerUp = (event: PointerEvent) => {
-    const startX = swipeStartX.current;
-    swipeStartX.current = null;
-    if (startX === null || event.pointerType !== "touch") return;
-    const dx = event.clientX - startX;
-    if (Math.abs(dx) >= SWIPE_THRESHOLD_PX) go(dx < 0 ? 1 : -1);
+
+  const onPointerMove = (event: PointerEvent<HTMLElement>) => {
+    const drag = dragRef.current;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const dx = (event.clientX - drag.startX) / drag.scale;
+    if (!drag.moved) {
+      if (Math.abs(dx) < DRAG_START_PX) return;
+      drag.moved = true;
+      setDragging(true);
+      // Giữ pointer cho carousel để kéo ra ngoài vẫn theo, và hành tinh không nhận hover trong lúc kéo.
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    moveTo(drag.startPosition - dx / DRAG_PX_PER_SLOT);
+  };
+
+  const onPointerEnd = (event: PointerEvent<HTMLElement>) => {
+    const drag = dragRef.current;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    dragRef.current = null;
+    if (!drag.moved) return;
+    setDragging(false);
+    // Thả chuột sau khi kéo vẫn sinh click — không để click đó chuyển khóa thêm lần nữa.
+    suppressClickRef.current = true;
+    release(drag.startTarget);
   };
 
   return (
     <section
+      ref={sectionRef}
       aria-roledescription="carousel"
       aria-label="Chọn khóa học"
-      className="absolute left-0 w-[1440px] touch-pan-y select-none"
+      className={`absolute left-0 w-[1440px] touch-pan-y select-none ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
       style={{ top: AREA_TOP, height: AREA_HEIGHT }}
       onPointerDown={onPointerDown}
-      onPointerUp={onPointerUp}
-      onPointerCancel={() => (swipeStartX.current = null)}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerEnd}
+      onPointerCancel={onPointerEnd}
+      onClickCapture={(event) => {
+        if (!suppressClickRef.current) return;
+        suppressClickRef.current = false;
+        event.stopPropagation();
+      }}
     >
       <OrbitArrow direction="prev" onClick={() => go(-1)} />
       <OrbitArrow direction="next" onClick={() => go(1)} />
