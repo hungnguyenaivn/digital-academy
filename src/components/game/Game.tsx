@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { patchProfile } from "@/lib/game/profile-store";
 import { GameEngine } from "./engine";
 import { generateMap, placeNpcs } from "./mapgen";
+import { playAnswerFeedback, speakLearningText, stopVoiceOver, VietnameseGuidanceToggle, VoiceButton } from "./VoiceOver";
 
 type Q = { id: string; type: "MCQ" | "TRUE_FALSE"; prompt: string; options: string[] };
 type StartData = {
@@ -45,6 +46,9 @@ export default function Game({
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [coinPop, setCoinPop] = useState<{ n: number; key: number } | null>(null);
+  const [vietnameseGuidance, setVietnameseGuidance] = useState(true);
+  const lastPromptRef = useRef<string | null>(null);
+  const lastFeedbackRef = useRef<string | null>(null);
 
   const answeredCount = Object.keys(answers).length;
   const total = data?.questions.length ?? 0;
@@ -111,6 +115,29 @@ export default function Game({
     const t = setTimeout(() => setCoinPop(null), 1600);
     return () => clearTimeout(t);
   }, [coinPop]);
+
+  useEffect(() => {
+    if (active === null || !data || data.world.slug !== "tieng-anh") {
+      stopVoiceOver();
+      lastPromptRef.current = null;
+      lastFeedbackRef.current = null;
+      return;
+    }
+    const question = data.questions[active];
+    const promptKey = `${question.id}:${vietnameseGuidance}`;
+    if (lastPromptRef.current !== promptKey) {
+      lastPromptRef.current = promptKey;
+      speakLearningText(question.prompt, vietnameseGuidance);
+    }
+    const answer = answers[active];
+    const feedbackKey = answer ? `${question.id}:${answer.correct}` : null;
+    if (answer && feedbackKey !== lastFeedbackRef.current) {
+      lastFeedbackRef.current = feedbackKey;
+      playAnswerFeedback(answer.correct, answer.explanation, vietnameseGuidance);
+    }
+  }, [active, answers, data, vietnameseGuidance]);
+
+  useEffect(() => () => stopVoiceOver(), []);
 
   const submit = useCallback(async () => {
     if (!data || active === null || selected === null || busy) return;
@@ -195,6 +222,7 @@ export default function Game({
 
   const q = active !== null && data ? data.questions[active] : null;
   const ans = active !== null ? answers[active] : undefined;
+  const englishLesson = data?.world.slug === "tieng-anh";
 
   return (
     <div className="game-root">
@@ -250,11 +278,20 @@ export default function Game({
           <div className="q-card" role="dialog" aria-modal="true" aria-label={`Câu ${active + 1}`}>
             <div className="q-head">
               <NpcPortrait sprite={engineRef.current?.getNpcSprite(active)} />
-              <div>
+              <div className="q-heading-tools">
                 <div className="q-tag">Câu {active + 1}/{total} · {q.type === "MCQ" ? "Trắc nghiệm" : "Đúng hay sai?"}</div>
+                {englishLesson && (
+                  <VietnameseGuidanceToggle
+                    enabled={vietnameseGuidance}
+                    onToggle={() => setVietnameseGuidance((enabled) => !enabled)}
+                  />
+                )}
               </div>
             </div>
-            <p className="q-prompt">{q.prompt}</p>
+            <div className="q-prompt-row">
+              <p className="q-prompt">{q.prompt}</p>
+              {englishLesson && <VoiceButton text={q.prompt} label="câu hỏi" />}
+            </div>
             <div className={`q-options ${q.type === "TRUE_FALSE" ? "tf" : ""}`}>
               {q.options.map((opt, i) => {
                 let cls = "q-opt";
@@ -263,16 +300,28 @@ export default function Game({
                   else if (i === ans.chosenIndex) cls += " wrong";
                 } else if (selected === i) cls += " selected";
                 return (
-                  <button key={i} className={cls} disabled={!!ans || busy} onClick={() => setSelected(i)}>
-                    <span className="k">{q.type === "TRUE_FALSE" ? (i === 0 ? "Đ" : "S") : KEYS[i]}</span>
-                    {opt}
-                  </button>
+                  <div key={i} className="q-option-row">
+                    <button className={cls} disabled={!!ans || busy} onClick={() => setSelected(i)}>
+                      <span className="k">{q.type === "TRUE_FALSE" ? (i === 0 ? "Đ" : "S") : KEYS[i]}</span>
+                      {opt}
+                    </button>
+                    {englishLesson && <VoiceButton text={opt} label={`đáp án ${i + 1}`} />}
+                  </div>
                 );
               })}
             </div>
             {ans && (
               <div className={`q-feedback ${ans.correct ? "ok" : "no"}`}>
-                <strong>{ans.correct ? "Chính xác! 🎉" : "Chưa đúng rồi 😅"}</strong>
+                <div className="q-feedback-heading">
+                  <strong>{ans.correct ? "Chính xác! 🎉" : "Chưa đúng rồi 😅"}</strong>
+                  {englishLesson && (
+                    <VoiceButton
+                      label="phản hồi"
+                      text={`${ans.correct ? "Great job!" : "Try again!"} ${ans.explanation}`}
+                      onClick={() => playAnswerFeedback(ans.correct, ans.explanation, vietnameseGuidance)}
+                    />
+                  )}
+                </div>
                 {!!ans.coinsAwarded && <span className="q-coins">🪙 +{ans.coinsAwarded} xu</span>}
                 {!ans.correct && <>Đáp án đúng: <b>{q.options[ans.correctIndex]}</b>. </>}
                 {ans.explanation}
