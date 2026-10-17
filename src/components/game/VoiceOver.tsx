@@ -4,6 +4,12 @@ import type { ButtonHTMLAttributes } from "react";
 
 type SpeechLanguage = "en-US" | "vi-VN";
 type SpeechPart = { text: string; language: SpeechLanguage };
+type VoiceProfile = { name: string; rate: number };
+
+const VOICE_PROFILES: Record<SpeechLanguage, VoiceProfile> = {
+  "en-US": { name: "Samantha", rate: 0.84 },
+  "vi-VN": { name: "Linh", rate: 0.94 },
+};
 
 let activeAudio: HTMLAudioElement | null = null;
 
@@ -64,8 +70,8 @@ export function stopVoiceOver() {
 
 function preferredVoice(language: SpeechLanguage): SpeechSynthesisVoice | undefined {
   const voices = window.speechSynthesis.getVoices();
-  const name = language === "en-US" ? "Samantha" : "Linh";
-  return voices.find((voice) => voice.name.includes(name))
+  const profile = VOICE_PROFILES[language];
+  return voices.find((voice) => voice.name.includes(profile.name))
     ?? voices.find((voice) => voice.lang.toLowerCase().startsWith(language.slice(0, 2)))
     ?? undefined;
 }
@@ -76,8 +82,9 @@ export function speakLearningText(text: string, includeVietnamese = true) {
   const parts = speechParts(text).filter((part) => includeVietnamese || part.language !== "vi-VN");
   for (const part of parts) {
     const utterance = new SpeechSynthesisUtterance(part.text);
+    const profile = VOICE_PROFILES[part.language];
     utterance.lang = part.language;
-    utterance.rate = 0.88;
+    utterance.rate = profile.rate;
     const voice = preferredVoice(part.language);
     if (voice) utterance.voice = voice;
     window.speechSynthesis.speak(utterance);
