@@ -14,5 +14,5 @@ export interface LevelBank {
 
 export interface WorldBank {
   slug: string;
-  levels: [LevelBank, LevelBank, LevelBank, LevelBank, LevelBank];
+  levels: LevelBank[];
 }

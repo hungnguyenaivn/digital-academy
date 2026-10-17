@@ -7,6 +7,8 @@ import BossGame from "@/components/game/boss/BossGame";
 import { useGameProfile } from "@/lib/game/profile-store";
 import { AVATAR_COLORS } from "@/lib/game/rules";
 
+const worldItemFor = (levelId: string) => levelId.startsWith("tieng-anh-U") ? "bài" : "level";
+
 export default function PlayClient({ params }: { params: Promise<{ levelId: string }> }) {
   const { levelId } = use(params);
   const { bfcacheId } = useRouter();
@@ -19,7 +21,8 @@ export default function PlayClient({ params }: { params: Promise<{ levelId: stri
 
 function PlayView({ levelId }: { levelId: string }) {
   const { profile, error } = useGameProfile();
-  if (error && !profile) return <GameErrorCard title="Chưa vào được level" message={error} />;
+  const courseItem = worldItemFor(levelId);
+  if (error && !profile) return <GameErrorCard title={`Chưa vào được ${courseItem}`} message={error} />;
   if (!profile) {
     // Cùng hình với màn "Đang tải bản đồ…" của Game để không bị nháy.
     return (
@@ -32,9 +35,9 @@ function PlayView({ levelId }: { levelId: string }) {
   }
   const world = profile.worlds.find((w) => w.levels.some((l) => l.id === levelId));
   const level = world?.levels.find((l) => l.id === levelId);
-  if (!world || !level) return <GameErrorCard title="Chưa vào được level" message="Không tìm thấy level này." />;
+  if (!world || !level) return <GameErrorCard title={`Chưa vào được ${courseItem}`} message={`Không tìm thấy ${courseItem} này.`} />;
   if (!level.unlocked) {
-    return <GameErrorCard title="Chưa vào được level" message="Level này còn khoá. Qua level trước để mở nhé!" href={`/world/${world.slug}`} label="Về danh sách level" />;
+    return <GameErrorCard title={`Chưa vào được ${courseItem}`} message={`${courseItem === "bài" ? "Bài" : "Level"} này còn khoá. Qua ${courseItem} trước để mở nhé!`} href={`/world/${world.slug}`} label={`Về danh sách ${courseItem}`} />;
   }
   const skin = profile.skins.equipped;
   if (level.boss) return <BossGame key={levelId} levelId={levelId} worldSlug={world.slug} avatarColor={AVATAR_COLORS[0]} skin={skin} />;

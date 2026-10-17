@@ -36,6 +36,30 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+/** Keep each textbook attempt balanced: five words, four sentence patterns, one phonics item. */
+function levelQuestions(pool: BankQuestion[]): BankQuestion[] {
+  if (!pool.some((question) => question.curriculumCategory)) return shuffle(pool).slice(0, QUESTIONS_PER_LEVEL);
+
+  const selected: BankQuestion[] = [];
+  const used = new Set<string>();
+  const targets = [
+    ["vocabulary", 5],
+    ["pattern", 4],
+    ["phonics", 1],
+  ] as const;
+  for (const [category, count] of targets) {
+    const choices = shuffle(pool.filter((question) => question.curriculumCategory === category));
+    for (const question of choices.slice(0, count)) {
+      selected.push(question);
+      used.add(question.id);
+    }
+  }
+  if (selected.length < QUESTIONS_PER_LEVEL) {
+    selected.push(...shuffle(pool.filter((question) => !used.has(question.id))).slice(0, QUESTIONS_PER_LEVEL - selected.length));
+  }
+  return shuffle(selected).slice(0, QUESTIONS_PER_LEVEL);
+}
+
 const notFoundAttempt = () => new ApiError(404, "Không tìm thấy lượt chơi.", "NOT_FOUND");
 
 function findAttempt(profile: StoredProfile, id: string): StoredAttempt {
@@ -75,8 +99,9 @@ export async function startAttempt(userKey: string, body: StartAttemptBody): Pro
       const lv = getLevel(body.levelId);
       if (!lv) throw new ApiError(404, "Không tìm thấy level.", "NOT_FOUND");
       const world = getWorld(lv.worldSlug)!;
-      if (!isLevelUnlocked(profile, world, lv.id)) throw new ApiError(403, "Level này còn khoá.", "LOCKED");
-      if (lv.questions.length === 0) throw new ApiError(409, "Level này chưa có câu hỏi.", "NOT_FOUND");
+      const courseItem = lv.worldSlug === "tieng-anh" ? "Bài" : "Level";
+      if (!isLevelUnlocked(profile, world, lv.id)) throw new ApiError(403, `${courseItem} này còn khoá.`, "LOCKED");
+      if (lv.questions.length === 0) throw new ApiError(409, `${courseItem} này chưa có câu hỏi.`, "NOT_FOUND");
       mode = "LEVEL";
       worldSlug = world.slug;
       pool = lv.questions;
@@ -84,7 +109,7 @@ export async function startAttempt(userKey: string, body: StartAttemptBody): Pro
       level = levelRef(lv);
     }
 
-    const questions = shuffle(pool).slice(0, QUESTIONS_PER_LEVEL);
+    const questions = mode === "LEVEL" ? levelQuestions(pool) : shuffle(pool).slice(0, QUESTIONS_PER_LEVEL);
 
     // Giới hạn số lượt đang mở: bỏ lượt cũ nhất (câu đã chấm trong đó vẫn đã được ghi vào xu/lastAnswer).
     const open = profile.attempts.filter((a) => a.finishedAt === null);

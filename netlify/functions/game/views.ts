@@ -1,4 +1,4 @@
-import { type BankLevel, type BankWorld, WORLDS, getQuestion } from "../../../src/data/game/questions";
+import { type BankLevel, type BankWorld, LEGACY_ENGLISH_LEVELS, WORLDS, getQuestion } from "../../../src/data/game/questions";
 import type { LevelRef, LevelView, ProfileResponse, WorldView } from "../../../src/lib/game/api-types";
 import { isBossLevel } from "../../../src/lib/game/rules";
 import type { StoredProfile } from "./profile-store";
@@ -55,6 +55,9 @@ export function totalStars(profile: StoredProfile): number {
 
 export function worldView(profile: StoredProfile, world: BankWorld): WorldView {
   const levels = levelsWithProgress(profile, world);
+  const legacy = world.slug === "tieng-anh"
+    ? LEGACY_ENGLISH_LEVELS.map((level) => profile.levels[level.id])
+    : undefined;
   return {
     slug: world.slug,
     name: world.name,
@@ -65,6 +68,14 @@ export function worldView(profile: StoredProfile, world: BankWorld): WorldView {
     stars: levels.reduce((s, l) => s + l.bestStars, 0),
     wrongCount: wrongQuestionIds(profile, world.slug).length,
     levels,
+    ...(legacy && {
+      legacyProgress: {
+        levelCount: LEGACY_ENGLISH_LEVELS.length,
+        passed: legacy.filter((progress) => progress?.passed).length,
+        stars: legacy.reduce((sum, progress) => sum + (progress?.bestStars ?? 0), 0),
+        hasProgress: legacy.some((progress) => (progress?.plays ?? 0) > 0),
+      },
+    }),
   };
 }
 

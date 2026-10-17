@@ -1,4 +1,4 @@
-import { LEVELS_PER_WORLD } from "./rules";
+import { ENGLISH_UNIT_COUNT, LEVELS_PER_WORLD } from "./rules";
 
 /** Thông tin 4 thế giới (hành tinh) — an toàn để import ở client. Thứ tự = thứ tự hiển thị. */
 export type WorldMeta = { slug: string; name: string; subtitle: string; color: string; order: number };
@@ -21,9 +21,21 @@ export function isWorldSlug(slug: string): boolean {
 /** id level = `${slug}-L${n}` (n = 1..LEVELS_PER_WORLD) — khớp với ngân hàng câu hỏi. */
 export const levelId = (slug: string, n: number) => `${slug}-L${n}`;
 
+/** ID bài học mới tách biệt với các level tiếng Anh cũ đã lưu trong hồ sơ. */
+export const englishUnitId = (unit: number) => `tieng-anh-U${String(unit).padStart(2, "0")}`;
+
+export const WORLD_LEVEL_COUNTS: Record<string, number> = {
+  "ai-cong-nghe": LEVELS_PER_WORLD,
+  "toan-ly-hoa": LEVELS_PER_WORLD,
+  "tieng-anh": ENGLISH_UNIT_COUNT,
+  "cyber-world": LEVELS_PER_WORLD,
+};
+
 /** Toàn bộ id level của mọi thế giới, theo thứ tự hiển thị. */
 export const ALL_LEVEL_IDS: string[] = WORLD_META.flatMap((w) =>
-  Array.from({ length: LEVELS_PER_WORLD }, (_, i) => levelId(w.slug, i + 1)),
+  w.slug === "tieng-anh"
+    ? Array.from({ length: ENGLISH_UNIT_COUNT }, (_, i) => englishUnitId(i + 1))
+    : Array.from({ length: LEVELS_PER_WORLD }, (_, i) => levelId(w.slug, i + 1)),
 );
 
 export function isLevelId(id: string): boolean {

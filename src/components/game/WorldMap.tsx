@@ -26,6 +26,8 @@ export default function WorldMap({ slug, avatarColor, skin, levels, questionsPer
   levelsRef.current = levels;
   const currentIdx = levels.findIndex((l) => l.current);
   const allPassed = levels.length > 0 && levels.every((l) => l.passed);
+  const isEnglishCourse = slug === "tieng-anh";
+  const courseItem = isEnglishCourse ? "bài" : "level";
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -36,8 +38,8 @@ export default function WorldMap({ slug, avatarColor, skin, levels, questionsPer
       onNear: setNear,
       onEnter: (i) => {
         const l = levelsRef.current[i];
-        if (!l) setToast(allPassedRef.current ? "Em đã mở hết kho báu rồi! 🏆" : "Qua hết các level để mở kho báu nhé!");
-        else if (!l.unlocked) setToast(`Qua level ${l.number - 1} để mở nhà này nhé 🔒`);
+        if (!l) setToast(allPassedRef.current ? "Em đã mở hết kho báu rồi! 🏆" : `Qua hết các ${courseItem} để mở kho báu nhé!`);
+        else if (!l.unlocked) setToast(`Qua ${courseItem} ${l.number - 1} để mở nhà này nhé 🔒`);
         else {
           engineRef.current?.setPaused(true);
           setEntering(true);
@@ -47,14 +49,14 @@ export default function WorldMap({ slug, avatarColor, skin, levels, questionsPer
     });
     engineRef.current = engine;
     engine.start();
-    // Bấm Back từ màn chơi: Next hiện lại route này với state cũ (overlay "Đang vào level…" còn bật) → tắt đi.
+    // Bấm Back từ màn chơi: Next hiện lại route này với state cũ (overlay "Đang vào bài/level…" còn bật) → tắt đi.
     setEntering(false);
     if (new URLSearchParams(window.location.search).has("e2e")) (window as unknown as { __vtMap: OverworldEngine }).__vtMap = engine;
     return () => {
       engine.destroy();
       engineRef.current = null;
     };
-  }, [slug, avatarColor, skin, router]);
+  }, [slug, courseItem, avatarColor, skin, router]);
 
   const allPassedRef = useRef(allPassed);
   allPassedRef.current = allPassed;
@@ -74,7 +76,7 @@ export default function WorldMap({ slug, avatarColor, skin, levels, questionsPer
       <div className="wm-top">
         <span className="wm-hint">Dùng ← ↑ ↓ → hoặc chạm để đi, leo dốc lên đồi{slug === "cyber-world" ? ", lội xuống sông để bơi 🏊, trèo thang lên nhà cây 🌳 (▲ lên, ▼ xuống)" : ""} · Nhấn E để vào nhà</span>
         {currentIdx >= 0 && (
-          <button className="btn btn-primary" onClick={() => engineRef.current?.walkTo(currentIdx)}>📍 Tới level của em</button>
+          <button className="btn btn-primary" onClick={() => engineRef.current?.walkTo(currentIdx)}>📍 Tới {courseItem} của em</button>
         )}
       </div>
 
@@ -82,14 +84,14 @@ export default function WorldMap({ slug, avatarColor, skin, levels, questionsPer
         <div className={`wm-card ${nearLevel.unlocked ? "" : "locked"}`}>
           <span className="wm-num" style={{ background: nearLevel.unlocked ? STOP_COLORS[near! % STOP_COLORS.length] : "#8b8fb0" }}>{nearLevel.unlocked ? nearLevel.number : "🔒"}</span>
           <div className="wm-body">
-            <h3>Level {nearLevel.number} · {nearLevel.title}</h3>
+            <h3>{isEnglishCourse ? "Bài" : "Level"} {nearLevel.number} · {nearLevel.title}</h3>
             {nearLevel.unlocked ? (
               <p>
                 <Stars n={nearLevel.stars} size={16} />{" "}
                 {nearLevel.plays === 0 ? `${questionsPerLevel} câu hỏi đang đợi em` : `Tốt nhất ${nearLevel.bestCorrect}/${questionsPerLevel} câu đúng`}
               </p>
             ) : (
-              <p>Qua level {nearLevel.number - 1} để mở nhà này nhé</p>
+              <p>Qua {courseItem} {nearLevel.number - 1} để mở nhà này nhé</p>
             )}
           </div>
           {nearLevel.unlocked && (
@@ -102,7 +104,7 @@ export default function WorldMap({ slug, avatarColor, skin, levels, questionsPer
             <span className="wm-num" style={{ background: "var(--star)" }}>{allPassed ? "🏆" : "🎁"}</span>
             <div className="wm-body">
               <h3>{allPassed ? "Em là nhà vô địch!" : "Kho báu đang đợi"}</h3>
-              <p>{allPassed ? "Em đã qua tất cả các level của hành tinh này." : "Qua hết các level để mở kho báu nhé!"}</p>
+              <p>{allPassed ? `Em đã qua tất cả các ${courseItem} của hành tinh này.` : `Qua hết các ${courseItem} để mở kho báu nhé!`}</p>
             </div>
           </div>
         )
@@ -127,7 +129,7 @@ export default function WorldMap({ slug, avatarColor, skin, levels, questionsPer
 
       {entering && (
         <div className="overlay" style={{ background: "#151a3dcc" }}>
-          <p className="title-kid" style={{ color: "#fff", fontSize: 28 }}>Đang vào level…</p>
+          <p className="title-kid" style={{ color: "#fff", fontSize: 28 }}>Đang vào {courseItem}…</p>
         </div>
       )}
     </div>

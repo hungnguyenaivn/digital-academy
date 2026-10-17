@@ -46,6 +46,8 @@ export default function Game({
   const [finishing, setFinishing] = useState(false);
   const [coinPop, setCoinPop] = useState<{ n: number; key: number } | null>(null);
 
+  const courseItem = worldSlug === "tieng-anh" ? "bài" : "level";
+  const courseItemTitle = worldSlug === "tieng-anh" ? "Bài" : "Level";
   const answeredCount = Object.keys(answers).length;
   const total = data?.questions.length ?? 0;
   const allDone = total > 0 && answeredCount === total;
@@ -59,13 +61,13 @@ export default function Game({
         const j = await r.json();
         if (!r.ok) {
           // Hết câu sai để ôn (409 NO_REVIEW) là tin vui, không phải lỗi.
-          const title = j.code === "NO_REVIEW" ? "Không còn câu cần ôn" : review ? "Chưa vào được ôn tập" : "Chưa vào được level";
+          const title = j.code === "NO_REVIEW" ? "Không còn câu cần ôn" : review ? "Chưa vào được ôn tập" : `Chưa vào được ${courseItem}`;
           setError({ title, message: j.error ?? "Không bắt đầu được lượt chơi" });
           return;
         }
         setData(j);
       })
-      .catch((e) => setError({ title: review ? "Chưa vào được ôn tập" : "Chưa vào được level", message: e.message }));
+      .catch((e) => setError({ title: review ? "Chưa vào được ôn tập" : `Chưa vào được ${courseItem}`, message: e.message }));
   }, [levelId, review, worldSlug]);
 
   const answersRef = useRef(answers);
@@ -186,7 +188,7 @@ export default function Game({
           <h1 className="title-kid">{error.title}</h1>
           <p className="muted">{error.message}</p>
           <div className="result-actions">
-            <Link href={review ? "/" : `/world/${worldSlug}`} className="btn btn-primary btn-lg">{review ? "Về các thế giới" : "Về danh sách level"}</Link>
+            <Link href={review ? "/" : `/world/${worldSlug}`} className="btn btn-primary btn-lg">{review ? "Về các thế giới" : `Về danh sách ${courseItem}`}</Link>
           </div>
         </div>
       </main>
@@ -211,7 +213,7 @@ export default function Game({
             <Link href={review ? "/" : `/world/${data.world.slug}`} className="hud-pill" style={{ textDecoration: "none" }}>← Thoát</Link>
             <span className="hud-pill">
               <span style={{ width: 12, height: 12, borderRadius: 4, background: data.world.color, display: "inline-block" }} />
-              {data.world.name} · {review ? <b>Ôn tập</b> : <><b>Level {data.level.number}</b> · {data.level.title}</>}
+              {data.world.name} · {review ? <b>Ôn tập</b> : <><b>{courseItemTitle} {data.level.number}</b> · {data.level.title}</>}
             </span>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>

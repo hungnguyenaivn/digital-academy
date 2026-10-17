@@ -42,16 +42,18 @@ export default function ResultClient({ params }: { params: Promise<{ id: string 
 
   const { level, world, total, stars, passed, questions, mode, boss, unlockedLevel, nextLevel, coinsEarned } = data;
   const review = mode === "REVIEW";
+  const isEnglishUnit = world.slug === "tieng-anh" && level.id.startsWith("tieng-anh-U");
+  const levelLabel = isEnglishUnit ? "Bài" : "Level";
   const title = review
     ? data.correct === total ? "Ôn xong hết rồi!" : "Cố lên, ôn thêm nhé!"
     : boss ? (stars > 0 ? "Hạ boss rồi! ⚔️" : "Boss vẫn còn đó!")
-    : stars === 3 ? "Xuất sắc!" : stars === 2 ? "Giỏi lắm!" : stars === 1 ? "Qua level rồi!" : "Suýt nữa rồi!";
+    : stars === 3 ? "Xuất sắc!" : stars === 2 ? "Giỏi lắm!" : stars === 1 ? `Qua ${isEnglishUnit ? "bài" : "level"} rồi!` : "Suýt nữa rồi!";
 
   return (
     <main className="space-bg center-screen">
       <div className="result-card">
         <p className="muted" style={{ margin: 0, fontWeight: 700 }}>
-          {world.name} · {review ? "Ôn tập" : `Level ${level.number} · ${level.title}`}
+          {world.name} · {review ? "Ôn tập" : `${levelLabel} ${level.number} · ${level.title}`}
         </p>
         <h1 className="title-kid" style={{ marginTop: 6 }}>{title}</h1>
         {!review && <div className="result-stars"><Stars n={stars} size={64} /></div>}
@@ -59,10 +61,10 @@ export default function ResultClient({ params }: { params: Promise<{ id: string 
         {coinsEarned > 0 && <p className="result-coins">Em nhận được 🪙 +{coinsEarned} xu</p>}
         {!passed && !review && (
           <p className="muted" style={{ marginBottom: 0 }}>
-            Cần đúng ít nhất {data.passMark} câu để qua level. Chơi lại nhé, câu hỏi sẽ được đổi!
+            Cần đúng ít nhất {data.passMark} câu để qua {isEnglishUnit ? "bài" : "level"}. Chơi lại nhé, câu hỏi sẽ được đổi!
           </p>
         )}
-        {unlockedLevel && <div className="banner-unlock">🔓 Đã mở Level {unlockedLevel.number} · {unlockedLevel.title}</div>}
+        {unlockedLevel && <div className="banner-unlock">🔓 Đã mở {unlockedLevel.id.startsWith("tieng-anh-U") ? "bài" : "Level"} {unlockedLevel.number} · {unlockedLevel.title}</div>}
 
         <div className="result-list">
           {questions.map((q, i) => {
@@ -90,10 +92,10 @@ export default function ResultClient({ params }: { params: Promise<{ id: string 
             <Link href="/" className="btn btn-primary btn-lg">Về các thế giới</Link>
           ) : (
             <>
-              <Link href={`/world/${world.slug}`} className="btn btn-light btn-lg">Danh sách level</Link>
+              <Link href={`/world/${world.slug}`} className="btn btn-light btn-lg">Danh sách {isEnglishUnit ? "bài" : "level"}</Link>
               <Link href={`/play/${level.id}`} className="btn btn-light btn-lg">Chơi lại ↻</Link>
               {passed && nextLevel && (
-                <Link href={`/play/${nextLevel.id}`} className="btn btn-primary btn-lg">Level {nextLevel.number} ▶</Link>
+                <Link href={`/play/${nextLevel.id}`} className="btn btn-primary btn-lg">{isEnglishUnit ? "Bài" : "Level"} {nextLevel.number} ▶</Link>
               )}
             </>
           )}

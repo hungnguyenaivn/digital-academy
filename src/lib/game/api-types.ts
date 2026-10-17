@@ -28,6 +28,8 @@ export type WorldView = WorldRef & {
   stars: number;
   wrongCount: number;
   levels: LevelView[];
+  /** Tiến độ 5 level tiếng Anh hỗn hợp trước đây, tách khỏi 20 bài Global Success. */
+  legacyProgress?: { levelCount: number; passed: number; stars: number; hasProgress: boolean };
 };
 export type ProfileResponse = {
   coins: number;

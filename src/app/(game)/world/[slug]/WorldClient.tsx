@@ -27,6 +27,7 @@ function WorldView({ slug }: { slug: string }) {
   if (!world) return <GameErrorCard title="Không tìm thấy thế giới" />;
 
   const levels = world.levels;
+  const courseItem = slug === "tieng-anh" ? "bài" : "level";
   const passedCount = levels.filter((l) => l.passed).length;
   const worldStars = levels.reduce((s, l) => s + l.bestStars, 0);
   // Đổi key khi tiến độ đổi (vd. vừa qua level rồi quay lại) để bản đồ vẽ lại nhà đã mở.
@@ -46,8 +47,13 @@ function WorldView({ slug }: { slug: string }) {
               <span>Đã qua {passedCount}/{levels.length}</span>
               <span>⭐ {worldStars}/{levels.length * 3}</span>
             </div>
+            {world.legacyProgress?.hasProgress && (
+              <p className="muted-light" style={{ fontSize: 12, margin: "8px 0 0" }}>
+                Tiến độ tiếng Anh trước đây: qua {world.legacyProgress.passed}/{world.legacyProgress.levelCount} level · ⭐ {world.legacyProgress.stars}
+              </p>
+            )}
             <p className="muted-light" style={{ fontSize: 14, marginTop: 18, lineHeight: 1.5 }}>
-              Điều khiển nhân vật đi tới từng ngôi nhà level. Mỗi level có {QUESTIONS_PER_LEVEL} câu hỏi rải trên bản đồ. Đúng từ {passMark(QUESTIONS_PER_LEVEL)} câu trở lên là qua level và mở level tiếp theo.
+              Điều khiển nhân vật đi tới từng ngôi nhà {courseItem}. Mỗi {courseItem} có {QUESTIONS_PER_LEVEL} câu hỏi rải trên bản đồ. Đúng từ {passMark(QUESTIONS_PER_LEVEL)} câu trở lên là qua {courseItem} và mở {courseItem} tiếp theo.
             </p>
             {world.wrongCount > 0 && (
               <Link href={`/review/${world.slug}`} className="btn btn-light btn-lg" style={{ marginTop: 16 }}>

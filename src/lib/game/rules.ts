@@ -1,7 +1,9 @@
 /** Luật chơi — dùng chung cho Netlify Function và giao diện. Chỉ import tương đối (function không hiểu alias "@/"). */
 export const QUESTIONS_PER_LEVEL = 10;
-/** Mỗi thế giới có đúng 5 level (ngân hàng câu hỏi phải khớp). */
+/** Số level ở các thế giới cũ; Cyber World vẫn dùng level 5 làm boss. */
 export const LEVELS_PER_WORLD = 5;
+/** Số bài trong khóa Tiếng Anh 3 — Global Success. */
+export const ENGLISH_UNIT_COUNT = 20;
 export const PASS_RATIO = 0.7; // đúng ≥ 70% thì qua level và mở level sau
 
 export function passMark(total: number): number {
