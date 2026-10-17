@@ -7,6 +7,7 @@ import Stars from "@/components/game/Stars";
 import type { AttemptResultResponse } from "@/lib/game/api-types";
 import { GameApiError, getAttempt } from "@/lib/game/client";
 import { refreshProfile } from "@/lib/game/profile-store";
+import { VoiceButton } from "@/components/game/VoiceOver";
 
 export default function ResultClient({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -42,7 +43,8 @@ export default function ResultClient({ params }: { params: Promise<{ id: string 
 
   const { level, world, total, stars, passed, questions, mode, boss, unlockedLevel, nextLevel, coinsEarned } = data;
   const review = mode === "REVIEW";
-  const isEnglishUnit = world.slug === "tieng-anh" && level.id.startsWith("tieng-anh-U");
+  const englishLesson = world.slug === "tieng-anh";
+  const isEnglishUnit = englishLesson && level.id.startsWith("tieng-anh-U");
   const levelLabel = isEnglishUnit ? "Bài" : "Level";
   const title = review
     ? data.correct === total ? "Ôn xong hết rồi!" : "Cố lên, ôn thêm nhé!"
@@ -74,11 +76,14 @@ export default function ResultClient({ params }: { params: Promise<{ id: string 
                 <span>{answered ? (q.correct ? "✅" : "❌") : "⬜"}</span>
                 <span>
                   <b>Câu {i + 1}.</b> {q.prompt}
+                  {englishLesson && <VoiceButton text={q.prompt} label={`câu hỏi ${i + 1}`} />}
                   {!answered && <em className="muted"> (chưa trả lời)</em>}
                   {answered && !q.correct && (
                     <span style={{ display: "block", marginTop: 4 }}>
                       Đáp án đúng: <b>{q.options[q.correctIndex]}</b>
+                      {englishLesson && <VoiceButton text={q.options[q.correctIndex]} label="đáp án đúng" />}
                       <span className="muted"> — {q.explanation}</span>
+                      {englishLesson && <VoiceButton text={q.explanation} label="giải thích" />}
                     </span>
                   )}
                 </span>
