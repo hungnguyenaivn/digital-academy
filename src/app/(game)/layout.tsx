@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "Game học tập: chọn hành tinh, vượt level, trả lời câu hỏi trên bản đồ mở.",
 };
 
-/** Layout chung cho các trang game (/world, /play, /result, /review, /skins): bọc `.vt` để CSS game chỉ áp dụng ở đây. */
+/** Layout chung cho các trang game (/world, /play, /result, /review, /skins, /mini-games): bọc `.vt` để CSS game chỉ áp dụng ở đây. */
 export default function GameLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="vt">
