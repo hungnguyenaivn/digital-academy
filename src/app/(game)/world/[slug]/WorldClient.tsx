@@ -54,6 +54,11 @@ function WorldView({ slug }: { slug: string }) {
                 🛠️ Ôn lại {world.wrongCount} câu sai ▶
               </Link>
             )}
+            {world.slug === "tieng-anh" && (
+              <Link href="/mini-games/snack-break" className="btn btn-primary sb-entry">
+                🍽️ Bữa xế vũ trụ ▶
+              </Link>
+            )}
           </aside>
           <section className="levels">
             <WorldMap
