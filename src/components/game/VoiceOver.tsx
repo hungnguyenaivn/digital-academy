@@ -12,9 +12,11 @@ const VOICE_PROFILES: Record<SpeechLanguage, VoiceProfile> = {
 };
 
 let activeAudio: HTMLAudioElement | null = null;
+let speechRequestId = 0;
+let voiceListPromise: Promise<SpeechSynthesisVoice[]> | null = null;
 
 const VIETNAMESE_MARKS = /[À-ỹ]/u;
-const VIETNAMESE_WORDS = /\b(?:chọn|câu|đúng|sai|hỏi|là|màu|nghĩa|số|tiếng|trong|em|bạn|mình|nào|này|nhé|từ|của|và|với|mẹ|bố|ông|bà|meo)\b/i;
+const VIETNAMESE_WORDS = /\b(?:con|chọn|câu|đúng|sai|hỏi|là|màu|nghĩa|số|tiếng|trong|em|bạn|mình|nào|này|nhé|từ|của|và|với|mẹ|bố|ông|bà|meo)\b/i;
 const QUOTED_TEXT = /(«[^»]+»|“[^”]+”|"[^"]+")/g;
 
 function languageOf(text: string, fallback: SpeechLanguage): SpeechLanguage {
@@ -64,12 +66,41 @@ function stopAudio() {
 }
 
 export function stopVoiceOver() {
+  speechRequestId += 1;
   stopAudio();
   if (typeof window !== "undefined") window.speechSynthesis?.cancel();
 }
 
-function preferredVoice(language: SpeechLanguage): SpeechSynthesisVoice | undefined {
-  const voices = window.speechSynthesis.getVoices();
+function voicesWhenReady(synthesis: SpeechSynthesis): Promise<SpeechSynthesisVoice[]> {
+  const voices = synthesis.getVoices();
+  if (voices.length > 0) return Promise.resolve(voices);
+  if (voiceListPromise) return voiceListPromise;
+
+  voiceListPromise = new Promise((resolve) => {
+    let settled = false;
+    let timeoutId = 0;
+    const finish = (available: SpeechSynthesisVoice[]) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      synthesis.removeEventListener("voiceschanged", onVoicesChanged);
+      resolve(available);
+    };
+    const onVoicesChanged = () => {
+      const available = synthesis.getVoices();
+      if (available.length > 0) finish(available);
+    };
+
+    synthesis.addEventListener("voiceschanged", onVoicesChanged);
+    timeoutId = window.setTimeout(() => finish(synthesis.getVoices()), 1200);
+    onVoicesChanged();
+  }).finally(() => {
+    voiceListPromise = null;
+  });
+  return voiceListPromise;
+}
+
+function preferredVoice(language: SpeechLanguage, voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
   const profile = VOICE_PROFILES[language];
   return voices.find((voice) => voice.name.includes(profile.name))
     ?? voices.find((voice) => voice.lang.toLowerCase().startsWith(language.slice(0, 2)))
@@ -79,16 +110,23 @@ function preferredVoice(language: SpeechLanguage): SpeechSynthesisVoice | undefi
 export function speakLearningText(text: string, includeVietnamese = true) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   stopVoiceOver();
+  const requestId = speechRequestId;
+  const synthesis = window.speechSynthesis;
   const parts = speechParts(text).filter((part) => includeVietnamese || part.language !== "vi-VN");
-  for (const part of parts) {
-    const utterance = new SpeechSynthesisUtterance(part.text);
-    const profile = VOICE_PROFILES[part.language];
-    utterance.lang = part.language;
-    utterance.rate = profile.rate;
-    const voice = preferredVoice(part.language);
-    if (voice) utterance.voice = voice;
-    window.speechSynthesis.speak(utterance);
-  }
+
+  void voicesWhenReady(synthesis).then((voices) => {
+    if (requestId !== speechRequestId) return;
+    for (const part of parts) {
+      if (requestId !== speechRequestId) return;
+      const utterance = new SpeechSynthesisUtterance(part.text);
+      const profile = VOICE_PROFILES[part.language];
+      utterance.lang = part.language;
+      utterance.rate = profile.rate;
+      const voice = preferredVoice(part.language, voices);
+      if (voice) utterance.voice = voice;
+      synthesis.speak(utterance);
+    }
+  });
 }
 
 export function playAnswerFeedback(correct: boolean, explanation: string, includeVietnamese = true) {
