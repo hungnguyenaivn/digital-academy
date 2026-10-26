@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: process.env.DEV_ORIGINS?.split(",").map((host) => host.trim()).filter(Boolean),
   cacheComponents: true,
   partialPrefetching: true,
+  experimental: {
+    agentUpgrade: "security",
+  },
   turbopack: {
     rules: {
       "*.css": {
