@@ -76,7 +76,7 @@ function voicesWhenReady(synthesis: SpeechSynthesis): Promise<SpeechSynthesisVoi
   if (voices.length > 0) return Promise.resolve(voices);
   if (voiceListPromise) return voiceListPromise;
 
-  voiceListPromise = new Promise((resolve) => {
+  const pending = new Promise<SpeechSynthesisVoice[]>((resolve) => {
     let settled = false;
     let timeoutId = 0;
     const finish = (available: SpeechSynthesisVoice[]) => {
@@ -97,7 +97,8 @@ function voicesWhenReady(synthesis: SpeechSynthesis): Promise<SpeechSynthesisVoi
   }).finally(() => {
     voiceListPromise = null;
   });
-  return voiceListPromise;
+  voiceListPromise = pending;
+  return pending;
 }
 
 function preferredVoice(language: SpeechLanguage, voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
