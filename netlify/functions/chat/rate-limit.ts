@@ -18,8 +18,14 @@ export type RateLimitResult =
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Ghi nhận một tin của `clientId` và cho biết còn được gửi không. */
-export async function consume(clientId: string, limit: number, now = Date.now()): Promise<RateLimitResult> {
-  const store = getStore({ name: "chat-rate-limit", consistency: "strong" });
+export async function consume(
+  clientId: string,
+  limit: number,
+  now = Date.now(),
+  /** Mỗi tính năng (chat, Clicky) đếm riêng trong store của mình. */
+  storeName = "chat-rate-limit",
+): Promise<RateLimitResult> {
+  const store = getStore({ name: storeName, consistency: "strong" });
   // Không lưu IP thô của học sinh, chỉ lưu mã băm.
   const key = createHash("sha256").update(clientId).digest("hex").slice(0, 32);
 
