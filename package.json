@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.133.0",
     "@netlify/blobs": "^11.1.4",
     "@rive-app/react-canvas": "^4.36.0",
+    "modern-screenshot": "^4.7.0",
     "next": "16.4.3",
     "react": "19.3.0",
     "react-dom": "19.3.0"
