@@ -65,6 +65,11 @@ function WorldView({ slug }: { slug: string }) {
                 🍽️ Bữa xế vũ trụ ▶
               </Link>
             )}
+            {world.slug === "tieng-anh" && (
+              <Link href="/mini-games/desert-creature-dash" className="btn btn-primary ct-entry">
+                🏜️ Thám hiểm sa mạc ▶
+              </Link>
+            )}
           </aside>
           <section className="levels">
             <WorldMap
